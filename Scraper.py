@@ -1,3 +1,5 @@
+import os
+
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -6,7 +8,7 @@ import numpy as np
 from scipy.stats import entropy
 import csv
 
-filepath = "/Users/florianzierer/Downloads/"
+filepath = "/Users/florianzierer/Downloads/Testing_images_urls/"
 
 # Dateipfade für "low" und "high" Dateien
 high_filepath = filepath + "score_h_95_domains.csv"
@@ -19,28 +21,45 @@ high_data = []
 
 # Funktion zum Laden der Daten aus einer CSV-Datei
 def load_data(filepath, data_array, cropped_folder):
-    with open(filepath, mode='r', newline='', encoding='utf-8') as csvfile:
-        csvreader = csv.DictReader(csvfile)
+    with open(filepath, newline='') as csvfile:
+        # Use semicolon as delimiter
+        csvreader = csv.reader(csvfile, delimiter=';')
+
+        # Read the header row and print it for debugging
+        headers = next(csvreader, None)
+
+        # Create the header to index mapping
+        header_indices = {header.strip(): index for index, header in enumerate(headers)}
 
         for row in csvreader:
-            # Ersetze 'url', 'screenshot', und 'newsguard_score' durch die tatsächlichen Spaltennamen in deiner Datei
-            url = row.get('url')
-            screenshot = row.get('screenshot')
-            newsguard_score = row.get('newsguard_score')
+            if len(row) < len(headers):
+                continue
 
-            # Füge nur gültige Einträge hinzu und baue den vollen Pfad zum Screenshot
-            if url and screenshot and newsguard_score:
-                screenshot_path = filepath + cropped_folder + "/" + screenshot
-                data_array.append([url, screenshot_path, newsguard_score])
+            try:
+                newsguard_score = row[header_indices['newsguard']]
+                url = row[header_indices['url']]
+                screenshot = row[header_indices['screenshot']]
+
+                # Check for missing data
+                if not newsguard_score or not url or not screenshot:
+                    print(f"Warning: Missing required data in row: {row}")
+                    continue
+
+                # Build the screenshot path and append data
+                screenshot_path = os.path.join(os.path.dirname(filepath), cropped_folder, screenshot)
+                data_array.append([url, screenshot_path, float(newsguard_score)])
+
+            except ValueError:
+                print(f"Warning: Invalid data format in row: {row}")
+                continue
+            except KeyError as e:
+                print(f"Warning: Missing header '{e.args[0]}' in header row.")
+                break
 
 
 # Daten aus "low" und "high" CSV-Dateien laden, mit entsprechendem Ordnernamen für die Screenshots
 load_data(low_filepath, low_data, "low_cropped")
 load_data(high_filepath, high_data, "high_cropped")
-
-# Ausgabe der Arrays
-print("Low Data:", low_data)
-print("High Data:", high_data)
 
 
 def get_bold_terms(soup):
@@ -80,7 +99,7 @@ def calculate_color_entropy(image_path):
 def analyze_webpage(data):
     """Hauptfunktion zur Analyse der Webseite"""
     try:
-        response = requests.get(data.url)
+        response = requests.get(data[0])
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -97,17 +116,11 @@ def analyze_webpage(data):
         donate_count = count_donate_occurrences(soup)
         print(f"\nAnzahl der Vorkommen von 'donate': {donate_count}")
 
-        color_entropy = calculate_color_entropy(data.screenshot_path)
+        color_entropy = calculate_color_entropy(data[1])
         print(f"\nFarbentropie des Screenshots: {color_entropy}")
-
 
     except requests.RequestException as e:
         print(f"Fehler beim Abrufen der Seite: {e}")
         return None
 
 
-for data in low_data:
-    analyze_webpage(data)
-
-for data in high_data:
-    analyze_webpage(data)
