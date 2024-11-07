@@ -1,14 +1,46 @@
 import requests
 from bs4 import BeautifulSoup
 import re
-from collections import Counter
-from selenium import webdriver
 from PIL import Image
 import numpy as np
 from scipy.stats import entropy
-import io
+import csv
 
-url = "https://www.foxnews.com/live-news/donald-trump-kamala-harris-election-news-11-3-24"
+filepath = "/Users/florianzierer/Downloads/"
+
+# Dateipfade für "low" und "high" Dateien
+high_filepath = filepath + "score_h_95_domains.csv"
+low_filepath = filepath + "score_l_75_full.csv"
+
+# Arrays für die gewünschten Daten
+low_data = []
+high_data = []
+
+
+# Funktion zum Laden der Daten aus einer CSV-Datei
+def load_data(filepath, data_array, cropped_folder):
+    with open(filepath, mode='r', newline='', encoding='utf-8') as csvfile:
+        csvreader = csv.DictReader(csvfile)
+
+        for row in csvreader:
+            # Ersetze 'url', 'screenshot', und 'newsguard_score' durch die tatsächlichen Spaltennamen in deiner Datei
+            url = row.get('url')
+            screenshot = row.get('screenshot')
+            newsguard_score = row.get('newsguard_score')
+
+            # Füge nur gültige Einträge hinzu und baue den vollen Pfad zum Screenshot
+            if url and screenshot and newsguard_score:
+                screenshot_path = filepath + cropped_folder + "/" + screenshot
+                data_array.append([url, screenshot_path, newsguard_score])
+
+
+# Daten aus "low" und "high" CSV-Dateien laden, mit entsprechendem Ordnernamen für die Screenshots
+load_data(low_filepath, low_data, "low_cropped")
+load_data(high_filepath, high_data, "high_cropped")
+
+# Ausgabe der Arrays
+print("Low Data:", low_data)
+print("High Data:", high_data)
 
 
 def get_bold_terms(soup):
@@ -36,33 +68,19 @@ def count_donate_occurrences(soup):
     return len(matches)
 
 
-def take_screenshot(url):
-    """
-    Öffnet die Seite mit Selenium und macht einen Screenshot
-    """
-    driver = webdriver.Chrome()
-    driver.get(url)
-
-    # Screenshot in Bytes speichern
-    screenshot = driver.get_screenshot_as_png()
-    driver.quit()
-
-    return Image.open(io.BytesIO(screenshot))
-
-
-def calculate_color_entropy(image):
-    """
-    Berechnet die Farbentropie eines Bildes
-    """
-    image_data = np.array(image.convert('RGB'))
+# Funktion zur Berechnung der Farbentropie eines vorhandenen Bildes
+def calculate_color_entropy(image_path):
+    image = Image.open(image_path).convert('RGB')
+    image_data = np.array(image)
     unique_colors, counts = np.unique(image_data.reshape(-1, 3), axis=0, return_counts=True)
+    image.close()
     return entropy(counts)
 
 
-def analyze_webpage(url):
+def analyze_webpage(data):
     """Hauptfunktion zur Analyse der Webseite"""
     try:
-        response = requests.get(url)
+        response = requests.get(data.url)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -79,17 +97,17 @@ def analyze_webpage(url):
         donate_count = count_donate_occurrences(soup)
         print(f"\nAnzahl der Vorkommen von 'donate': {donate_count}")
 
-        # Screenshot machen, Farbentropie berechnen und Screenshot löschen
-        screenshot = take_screenshot(url)
-        color_entropy = calculate_color_entropy(screenshot)
+        color_entropy = calculate_color_entropy(data.screenshot_path)
         print(f"\nFarbentropie des Screenshots: {color_entropy}")
 
-        # Speicher freigeben, indem das Bild gelöscht wird
-        screenshot.close()
 
     except requests.RequestException as e:
         print(f"Fehler beim Abrufen der Seite: {e}")
         return None
 
-# Funktion aufrufen
-analyze_webpage(url)
+
+for data in low_data:
+    analyze_webpage(data)
+
+for data in high_data:
+    analyze_webpage(data)
