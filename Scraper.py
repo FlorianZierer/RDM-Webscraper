@@ -8,10 +8,8 @@ from PIL import Image
 import numpy as np
 import pandas as pd
 
-filepath = "/Users/florianzierer/Downloads/Testing_images_urls/"
-
-# Dateipfad für "low" und "high" Dateien
-articles_filepath = filepath + "articles.xlsx"
+filepath = "C:/Users/Nutzer/Desktop/Testing_images_urls/Testing_images_urls"
+articles_filepath = filepath + "/articles.xlsx"
 
 # Arrays für die gewünschten Daten
 low_data = []
@@ -46,7 +44,7 @@ def load_data(filepath):
             # Match label and append to the correct array
             if high_pattern.match(label):
                 # Build the screenshot path
-                screenshot_path = os.path.join(os.path.dirname(filepath), "/high_cropped", screenshot)
+                screenshot_path = os.path.join(os.path.dirname(filepath), "high_cropped", screenshot)
                 high_data.append([url, screenshot_path, float(newsguard_score.replace(",", "."))])
             elif low_pattern.match(label):
                 screenshot = screenshot.replace("./screenshots/low/", "")
@@ -96,6 +94,9 @@ def count_donate_occurrences(soup):
 
 
 # Funktion zur Berechnung der Farbvorkommen
+from PIL import Image
+import numpy as np
+
 def count_unique_colors(image_path):
     try:
         image = Image.open(image_path).convert('RGB')  # Bild öffnen und in RGB konvertieren
@@ -105,6 +106,10 @@ def count_unique_colors(image_path):
     except FileNotFoundError:
         print(f"File not found: {image_path}")
         return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
 
 
 # Listen zur Speicherung der analysierten Daten
@@ -139,7 +144,7 @@ def analyze_webpage(data, score_list, entropy_list, donate_list, bold_list, img_
         donate_count = count_donate_occurrences(soup)
         donate_list.append(donate_count)
 
-        # Compute color entropy
+        # Compute colour Vorkommen
         color_vorkommen = count_unique_colors(data[1])
         entropy_list.append(color_vorkommen)
 
@@ -169,8 +174,8 @@ for data in high_data:
 # Ausgabe der Ergebnisse
 print("\nNewsguard Scores (low):", newsguard_scores_low)
 print("Newsguard Scores (high):", newsguard_scores_high)
-print("\nColor Entropy (low):", color_entropy_low)
-print("Color Entropy (high):", color_entropy_high)
+print("\nUnique colours (low):", color_entropy_low)
+print("Unique colours (high):", color_entropy_high)
 print("\nDonate Count (low):", donate_count_low)
 print("Donate Count (high):", donate_count_high)
 print("\nBold Terms Count (low):", bold_terms_count_low)
