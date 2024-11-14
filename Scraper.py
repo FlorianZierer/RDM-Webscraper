@@ -8,21 +8,21 @@ from PIL import Image
 import numpy as np
 import pandas as pd
 
-filepath = "C:/Users/Nutzer/Desktop/Testing_images_urls/Testing_images_urls"
+filepath = "/Users/florianzierer/Downloads/Testing_images_urls"
 articles_filepath = filepath + "/articles.xlsx"
 
 # Arrays für die gewünschten Daten
 low_data = []
 high_data = []
 
+low_labels = []
+high_labels = []
+
 
 # Function to load data from an Excel file
 def load_data(filepath):
     # Read the Excel file into a DataFrame
     df = pd.read_excel(filepath)
-
-    # Fill NaN values with empty strings to avoid errors
-    df = df.fillna('')
 
     # Regex patterns for "high" and "low" labels
     high_pattern = re.compile(r"h\d+")
@@ -34,23 +34,27 @@ def load_data(filepath):
             # Extract required data
             newsguard_score = f"{row['newsguard']}"
             url = row['url']
-            screenshot = row['screenshot']
+            screenshot = str(row['screenshot'])
             label = row['label']
 
             # Check for missing data
             if not newsguard_score or not url or not screenshot:
                 continue
 
+            if ("./screenshots/low/" in screenshot):
+                screenshot = screenshot.replace("./screenshots/low/", "")
+
             # Match label and append to the correct array
             if high_pattern.match(label):
                 # Build the screenshot path
-                screenshot_path = os.path.join(os.path.dirname(filepath), "high_cropped", screenshot)
-                high_data.append([url, screenshot_path, float(newsguard_score.replace(",", "."))])
+                screenshot_path = os.path.join(os.path.dirname(filepath) + "/high_cropped", screenshot)
+                high_data.append([url, screenshot_path, float(newsguard_score.replace(",", ".")), label])
+                low_labels.append(label)
             elif low_pattern.match(label):
-                screenshot = screenshot.replace("./screenshots/low/", "")
                 # Build the screenshot path
                 screenshot_path = os.path.join(os.path.dirname(filepath) + "/low_cropped", screenshot)
-                low_data.append([url, screenshot_path, float(newsguard_score.replace(",", "."))])
+                low_data.append([url, screenshot_path, float(newsguard_score.replace(",", ".")), label])
+                high_labels.append(label)
 
         except ValueError as e:
             print(f"ValueError at row {index}: {e}")
@@ -97,6 +101,7 @@ def count_donate_occurrences(soup):
 from PIL import Image
 import numpy as np
 
+
 def count_unique_colors(image_path):
     try:
         image = Image.open(image_path).convert('RGB')  # Bild öffnen und in RGB konvertieren
@@ -109,7 +114,6 @@ def count_unique_colors(image_path):
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
-
 
 
 # Listen zur Speicherung der analysierten Daten
