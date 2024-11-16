@@ -1,65 +1,83 @@
 import os
+import time
 
 import requests
 from bs4 import BeautifulSoup
 import re
 from PIL import Image
 import numpy as np
-from scipy.stats import entropy
-import csv
+import pandas as pd
 
-filepath = "/Users/florianzierer/Downloads/Testing_images_urls/"
-
-# Dateipfade für "low" und "high" Dateien
-high_filepath = filepath + "score_h_95_domains.csv"
-low_filepath = filepath + "score_l_75_full.csv"
+filepath = "C:/Users/Nutzer/Desktop/Testing_images_urls/Testing_images_urls"
+articles_filepath = filepath + "/articles.xlsx"
 
 # Arrays für die gewünschten Daten
 low_data = []
 high_data = []
 
+low_labels = []
+high_labels = []
 
-# Funktion zum Laden der Daten aus einer CSV-Datei
-def load_data(filepath, data_array, cropped_folder):
-    with open(filepath, newline='') as csvfile:
-        # Use semicolon as delimiter
-        csvreader = csv.reader(csvfile, delimiter=';')
+donate_washingtontimes = 0
+bold_washingtontimes = 5
+img_washingtontimes = 90
 
-        # Read the header row and print it for debugging
-        headers = next(csvreader, None)
+donate_france24 = 0
+bold_france24 = 0
+img_france24 = 6
 
-        # Create the header to index mapping
-        header_indices = {header.strip(): index for index, header in enumerate(headers)}
 
-        for row in csvreader:
-            if len(row) < len(headers):
+# Function to load data from an Excel file
+def load_data(filepath):
+    # Read the Excel file into a DataFrame
+    df = pd.read_excel(filepath)
+
+    # Regex patterns for "high" and "low" labels
+    high_pattern = re.compile(r"h\d+")
+    low_pattern = re.compile(r"l\d+")
+
+    # Iterate over DataFrame rows
+    for index, row in df.iterrows():
+        try:
+            # Extract required data
+            newsguard_score = f"{row['newsguard']}"
+            url = row['url']
+            screenshot = str(row['screenshot'])
+            label = row['label']
+
+            # Check for missing data
+            if not newsguard_score or not url or not screenshot:
                 continue
 
-            try:
-                newsguard_score = row[header_indices['newsguard']]
-                url = row[header_indices['url']]
-                screenshot = row[header_indices['screenshot']]
+            if ("./screenshots/low/" in screenshot):
+                screenshot = screenshot.replace("./screenshots/low/", "")
 
-                # Check for missing data
-                if not newsguard_score or not url or not screenshot:
-                    print(f"Warning: Missing required data in row: {row}")
-                    continue
+            # Match label and append to the correct array
+            if high_pattern.match(label):
+                # Build the screenshot path
+                screenshot_path = os.path.join(os.path.dirname(filepath) + "/high_cropped", screenshot)
+                high_data.append([url, screenshot_path, float(newsguard_score.replace(",", ".")), label])
+                low_labels.append(label)
+            elif low_pattern.match(label):
+                # Build the screenshot path
+                screenshot_path = os.path.join(os.path.dirname(filepath) + "/low_cropped", screenshot)
+                low_data.append([url, screenshot_path, float(newsguard_score.replace(",", ".")), label])
+                high_labels.append(label)
 
-                # Build the screenshot path and append data
-                screenshot_path = os.path.join(os.path.dirname(filepath), cropped_folder, screenshot)
-                data_array.append([url, screenshot_path, float(newsguard_score)])
-
-            except ValueError:
-                print(f"Warning: Invalid data format in row: {row}")
-                continue
-            except KeyError as e:
-                print(f"Warning: Missing header '{e.args[0]}' in header row.")
-                break
+        except ValueError as e:
+            print(f"ValueError at row {index}: {e}")
+            continue
+        except KeyError as e:
+            print(f"KeyError: Missing column '{e.args[0]}' in the DataFrame.")
+            break
 
 
-# Daten aus "low" und "high" CSV-Dateien laden, mit entsprechendem Ordnernamen für die Screenshots
-load_data(low_filepath, low_data, "low_cropped")
-load_data(high_filepath, high_data, "high_cropped")
+# Call the function
+load_data(articles_filepath)
+
+# Optional: Print results for debugging
+print("Low Data:", low_data)
+print("High Data:", high_data)
 
 
 def get_bold_terms(soup):
@@ -87,40 +105,125 @@ def count_donate_occurrences(soup):
     return len(matches)
 
 
-# Funktion zur Berechnung der Farbentropie eines vorhandenen Bildes
-def calculate_color_entropy(image_path):
-    image = Image.open(image_path).convert('RGB')
-    image_data = np.array(image)
-    unique_colors, counts = np.unique(image_data.reshape(-1, 3), axis=0, return_counts=True)
-    image.close()
-    return entropy(counts)
+# Funktion zur Berechnung der Farbvorkommen
+from PIL import Image
+import numpy as np
 
 
-def analyze_webpage(data):
-    """Hauptfunktion zur Analyse der Webseite"""
+def count_unique_colors(image_path):
+    # Prüfen, ob der image_path None oder NaN ist
+    if not image_path or (isinstance(image_path, float) and np.isnan(image_path)):
+        print(f"Invalid image path: {image_path}")
+        return None
+
     try:
-        response = requests.get(data[0])
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        # Versuchen, das Bild zu öffnen
+        image = Image.open(image_path).convert('RGB')  # Bild öffnen und in RGB konvertieren
+        image_data = np.array(image)  # Bilddaten in ein Numpy-Array umwandeln
+        unique_colors = np.unique(image_data.reshape(-1, 3), axis=0)  # Einzigartige Farben finden
+        return len(unique_colors)  # Anzahl der einzigartigen Farben zurückgeben
 
-        # Fettgedruckte Begriffe analysieren
-        bold_text = get_bold_terms(soup)
-        print(f"\nAnzahl der fettgedruckten Begriffe: {len(bold_text)}")
-        print("Fettgedruckte Begriffe:", bold_text)
-
-        # Bild-Tags zählen
-        img_count = count_img_tags(soup)
-        print(f"\nAnzahl der Bilder auf der Seite: {img_count}")
-
-        # Vorkommen von 'donate' zählen
-        donate_count = count_donate_occurrences(soup)
-        print(f"\nAnzahl der Vorkommen von 'donate': {donate_count}")
-
-        color_entropy = calculate_color_entropy(data[1])
-        print(f"\nFarbentropie des Screenshots: {color_entropy}")
-
-    except requests.RequestException as e:
-        print(f"Fehler beim Abrufen der Seite: {e}")
+    except FileNotFoundError:
+        # Falls Bild nicht gefunden wurde, nach l9.png suchen
+        print(f"File not found: {image_path}. Trying 'l9.png' instead.")
+        alternate_image_path = os.path.join(os.path.dirname(image_path), "l9.png")
+        try:
+            # l9.png öffnen
+            image = Image.open(alternate_image_path).convert('RGB')
+            image_data = np.array(image)
+            unique_colors = np.unique(image_data.reshape(-1, 3), axis=0)
+            return len(unique_colors)
+        except FileNotFoundError:
+            print(f"Alternate file 'l9.png' also not found in {os.path.dirname(image_path)}.")
+            return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
         return None
 
 
+# Listen zur Speicherung der analysierten Daten
+newsguard_scores_low, newsguard_scores_high = [], []
+color_entropy_low, color_entropy_high = [], []
+donate_count_low, donate_count_high = [], []
+bold_terms_count_low, bold_terms_count_high = [], []
+img_count_low, img_count_high = [], []
+
+
+def analyze_webpage(data, score_list, entropy_list, donate_list, bold_list, img_list):
+    """Main function to analyze the webpage"""
+    url = data[0]
+    try:
+        # Check for predefined URLs with manual data
+        if "washingtontimes.com" in url:
+            # Use predefined values for The Washington Times
+            donate_list.append(donate_washingtontimes)
+            bold_list.append(bold_washingtontimes)
+            img_list.append(img_washingtontimes)
+        elif "france24.com" in url:
+            # Use predefined values for France24
+            donate_list.append(donate_france24)
+            bold_list.append(bold_france24)
+            img_list.append(img_france24)
+        else:
+            # Fetch and analyze the page for other URLs
+            headers = {
+                'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                               'AppleWebKit/537.36 (KHTML, like Gecko) '
+                               'Chrome/70.0.3538.77 Safari/537.36')
+            }
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            # Extract bold terms
+            bold_text = get_bold_terms(soup)
+            bold_list.append(len(bold_text))
+
+            # Count image tags
+            img_count = count_img_tags(soup)
+            img_list.append(img_count)
+
+            # Count 'donate' occurrences
+            donate_count = count_donate_occurrences(soup)
+            donate_list.append(donate_count)
+
+        # Compute unique color occurrences
+        color_vorkommen = count_unique_colors(data[1])
+        entropy_list.append(color_vorkommen)
+
+        # Append Newsguard score
+        score_list.append(data[2])
+
+        # Rate limiting
+        time.sleep(1)  # Sleep for 1 second
+
+    except requests.HTTPError as e:
+        print(f"HTTP Error {e.response.status_code} for URL: {url}")
+    except requests.RequestException as e:
+        print(f"Error fetching {url}: {e}")
+
+
+
+
+# Webseiten in low_data und high_data analysieren und Listen befüllen
+print("Analysiere Webseiten in low_data...")
+for data in low_data:
+    analyze_webpage(data, newsguard_scores_low, color_entropy_low, donate_count_low, bold_terms_count_low,
+                    img_count_low)
+
+print("\nAnalysiere Webseiten in high_data...")
+for data in high_data:
+    analyze_webpage(data, newsguard_scores_high, color_entropy_high, donate_count_high, bold_terms_count_high,
+                    img_count_high)
+
+# Ausgabe der Ergebnisse
+print("\nNewsguard Scores (low):", newsguard_scores_low)
+print("Newsguard Scores (high):", newsguard_scores_high)
+print("\nUnique colours (low):", color_entropy_low)
+print("Unique colours (high):", color_entropy_high)
+print("\nDonate Count (low):", donate_count_low)
+print("Donate Count (high):", donate_count_high)
+print("\nBold Terms Count (low):", bold_terms_count_low)
+print("Bold Terms Count (high):", bold_terms_count_high)
+print("\nImage Count (low):", img_count_low)
+print("Image Count (high):", img_count_high)
