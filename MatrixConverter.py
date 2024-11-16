@@ -60,7 +60,7 @@ for idx, data_list in enumerate(data_lists):
     matrix_df = pd.DataFrame(distance_matrix)
 
     # Labels hinzufügen
-    if "low" in name_list[idx]:
+    if "high" in name_list[idx]:
         labels = low_labels[:num_articles]
     else:
         labels = high_labels[:num_articles]
@@ -74,7 +74,3 @@ for idx, data_list in enumerate(data_lists):
     matrix_df.to_csv(output_path, index=True)
     print(f"CSV-Datei für {name_list[idx]} erfolgreich erstellt unter {output_path}.")
 
-# Manuelles zählen von donat/Donat // Bold terms zählen "<strong>" // img in html "<img"
-# dann checken ob die listen bis 20 gehen und bei high h1-20 und bei l1-20
-# readme updaten wir haben bold gesucht hand strong
-# wir habens nicht normalisiert und warum

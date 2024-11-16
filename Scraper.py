@@ -8,7 +8,7 @@ from PIL import Image
 import numpy as np
 import pandas as pd
 
-filepath = "/Users/florianzierer/Downloads/Testing_images_urls"
+filepath = "C:/Users/Nutzer/Desktop/Testing_images_urls/Testing_images_urls"
 articles_filepath = filepath + "/articles.xlsx"
 
 # Arrays für die gewünschten Daten
@@ -17,6 +17,14 @@ high_data = []
 
 low_labels = []
 high_labels = []
+
+donate_washingtontimes = 0
+bold_washingtontimes = 5
+img_washingtontimes = 93
+
+donate_france24 = 0
+bold_france24 = 0
+img_france24 = 6
 
 
 # Function to load data from an Excel file
@@ -103,14 +111,31 @@ import numpy as np
 
 
 def count_unique_colors(image_path):
+    # Prüfen, ob der image_path None oder NaN ist
+    if not image_path or (isinstance(image_path, float) and np.isnan(image_path)):
+        print(f"Invalid image path: {image_path}")
+        return None
+
     try:
+        # Versuchen, das Bild zu öffnen
         image = Image.open(image_path).convert('RGB')  # Bild öffnen und in RGB konvertieren
         image_data = np.array(image)  # Bilddaten in ein Numpy-Array umwandeln
         unique_colors = np.unique(image_data.reshape(-1, 3), axis=0)  # Einzigartige Farben finden
         return len(unique_colors)  # Anzahl der einzigartigen Farben zurückgeben
+
     except FileNotFoundError:
-        print(f"File not found: {image_path}")
-        return None
+        # Falls Bild nicht gefunden wurde, nach l9.png suchen
+        print(f"File not found: {image_path}. Trying 'l9.png' instead.")
+        alternate_image_path = os.path.join(os.path.dirname(image_path), "l9.png")
+        try:
+            # l9.png öffnen
+            image = Image.open(alternate_image_path).convert('RGB')
+            image_data = np.array(image)
+            unique_colors = np.unique(image_data.reshape(-1, 3), axis=0)
+            return len(unique_colors)
+        except FileNotFoundError:
+            print(f"Alternate file 'l9.png' also not found in {os.path.dirname(image_path)}.")
+            return None
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
@@ -126,29 +151,43 @@ img_count_low, img_count_high = [], []
 
 def analyze_webpage(data, score_list, entropy_list, donate_list, bold_list, img_list):
     """Main function to analyze the webpage"""
+    url = data[0]
     try:
-        headers = {
-            'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                           'AppleWebKit/537.36 (KHTML, like Gecko) '
-                           'Chrome/70.0.3538.77 Safari/537.36')
-        }
-        response = requests.get(data[0], headers=headers)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        # Check for predefined URLs with manual data
+        if "washingtontimes.com" in url:
+            # Use predefined values for The Washington Times
+            donate_list.append(donate_washingtontimes)
+            bold_list.append(bold_washingtontimes)
+            img_list.append(img_washingtontimes)
+        elif "france24.com" in url:
+            # Use predefined values for France24
+            donate_list.append(donate_france24)
+            bold_list.append(bold_france24)
+            img_list.append(img_france24)
+        else:
+            # Fetch and analyze the page for other URLs
+            headers = {
+                'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                               'AppleWebKit/537.36 (KHTML, like Gecko) '
+                               'Chrome/70.0.3538.77 Safari/537.36')
+            }
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Extract bold terms
-        bold_text = get_bold_terms(soup)
-        bold_list.append(len(bold_text))
+            # Extract bold terms
+            bold_text = get_bold_terms(soup)
+            bold_list.append(len(bold_text))
 
-        # Count image tags
-        img_count = count_img_tags(soup)
-        img_list.append(img_count)
+            # Count image tags
+            img_count = count_img_tags(soup)
+            img_list.append(img_count)
 
-        # Count 'donate' occurrences
-        donate_count = count_donate_occurrences(soup)
-        donate_list.append(donate_count)
+            # Count 'donate' occurrences
+            donate_count = count_donate_occurrences(soup)
+            donate_list.append(donate_count)
 
-        # Compute colour Vorkommen
+        # Compute unique color occurrences
         color_vorkommen = count_unique_colors(data[1])
         entropy_list.append(color_vorkommen)
 
@@ -159,9 +198,11 @@ def analyze_webpage(data, score_list, entropy_list, donate_list, bold_list, img_
         time.sleep(1)  # Sleep for 1 second
 
     except requests.HTTPError as e:
-        print(f"HTTP Error {e.response.status_code} for URL: {data[0]}")
+        print(f"HTTP Error {e.response.status_code} for URL: {url}")
     except requests.RequestException as e:
-        print(f"Error fetching {data[0]}: {e}")
+        print(f"Error fetching {url}: {e}")
+
+
 
 
 # Webseiten in low_data und high_data analysieren und Listen befüllen
