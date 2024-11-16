@@ -20,7 +20,7 @@ high_labels = []
 
 donate_washingtontimes = 0
 bold_washingtontimes = 5
-img_washingtontimes = 93
+img_washingtontimes = 90
 
 donate_france24 = 0
 bold_france24 = 0
